@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-
-
+import click
 import pandas as pd
 from sqlalchemy import create_engine
 from tqdm.auto import tqdm
+
 
 dtype = {
     "VendorID": "Int64",
@@ -31,43 +31,60 @@ parse_dates = [
     "tpep_dropoff_datetime"
 ]
 
-first=True
-def run():
-    year=2021
-    month=1
-    pg_user='root'
-    pg_pass='root'
-    pg_host='localhost'
-    pg_port=5432
-    pg_db='ny_taxi'
-    chunksize = 100000
-    target_table = 'yellow_taxi_data'
 
-    prefix='https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow'
-    url=f'{prefix}/yellow_tripdata_{year}-{month:02d}.csv.gz'
-    engine=create_engine('postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}')
-    df_iter=pd.read_csv(
-                url,
-                dtype=dtype,
-                parse_dates=parse_dates,
-                iterator=True,
-                chunksize=chunksize,
-            )
+@click.command()
+@click.option("--year", type=int, default=2021, show_default=True, help="Year of the taxi dataset.")
+@click.option("--month", type=int, default=1, show_default=True, help="Month of the taxi dataset (1-12).")
+@click.option("--pg-user", default="root", show_default=True, help="Postgres user.")
+@click.option("--pg-pass", default="root", show_default=True, help="Postgres password.")
+@click.option("--pg-host", default="localhost", show_default=True, help="Postgres host.")
+@click.option("--pg-port", type=int, default=5432, show_default=True, help="Postgres port.")
+@click.option("--pg-db", default="ny_taxi", show_default=True, help="Postgres database name.")
+@click.option("--chunksize", type=int, default=100000, show_default=True, help="Rows per chunk to ingest.")
+@click.option("--target-table", default="yellow_taxi_data", show_default=True, help="Target table name in Postgres.")
+def run(
+    year,
+    month,
+    pg_user,
+    pg_pass,
+    pg_host,
+    pg_port,
+    pg_db,
+    chunksize,
+    target_table,
+):
+    """Download a single month of NYC Yellow taxi data and ingest it into PostgreSQL."""
+
+    prefix = "https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow"
+    url = f"{prefix}/yellow_tripdata_{year}-{month:02d}.csv.gz"
+    engine = create_engine(f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}")
+
+    df_iter = pd.read_csv(
+        url,
+        dtype=dtype,
+        parse_dates=parse_dates,
+        iterator=True,
+        chunksize=chunksize,
+    )
+
+    first = True
     for df_chunk in tqdm(df_iter):
         if first:
             df_chunk.head(0).to_sql(
                 name=target_table,
                 con=engine,
-                if_exists='replace'
+                if_exists="replace",
             )
-            first=False
+            first = False
+
         df_chunk.to_sql(
-            name='yellow_taxi_data',
+            name=target_table,
             con=engine,
-            if_exists='append'
+            if_exists="append",
         )
 
-if __name__=='__name__':
+
+if __name__ == "__main__":
     run()
 
 
